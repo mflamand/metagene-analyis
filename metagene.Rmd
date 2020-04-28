@@ -13,7 +13,7 @@ output:
 
 to install you can run:
 *install.packages("tidyverse") # ggplot comes with tidyverse, no need to reinstall.
-*install.packages("Scales)
+*install.packages("scales)
 *etc
 
 this only needs to be done the first time, unless you installed a new version of R
