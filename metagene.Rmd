@@ -1,0 +1,274 @@
+---
+title: "metagene analysis for m6A demo - Mathieu Flamand"
+output:
+  html_document:
+    df_print: paged
+---
+####2020-05-01
+# Demo on metagene analysis plotting for m6A datasets
+##based on metaPlotR 'https://github.com/olarerin/metaPlotR' with some modification
+
+
+##you will need the following libraries
+
+to install you can run:
+install.packages("tidyverse") # ggplot comes with tidyverse, no need to reinstall.
+install.packages("grid")
+install.packages("scales)
+
+this only needs to be done the first time, unless you installed a new version of R
+
+```{r HIDE = T}
+# packages are loaded with : (everytime you run the markdown)
+
+library(tidyverse)
+library(ggplot2)
+library(grid)
+library(scales)
+#optional for the last graph
+library(cowplot)
+
+```
+
+###First we read the input data from perl and store it in m6a.dist
+
+```{r}
+#read tab delim file
+m6a.dist<-read.delim("annot_m6A.final.sorted.dist.measures.txt", header = T)
+# we can further inspect the data stored in m6a.dist
+dim(m6a.dist)
+head(m6a.dist, 10)
+class(m6a.dist)
+```
+
+we now have all the information for all m6A sites stored in a dataframe. In here we have the relative position of m6a sites in either 5', 3' or cds stored in rel_location : 0-1 is 5'UTR, 1-2 is CDS and 2-3 is 3'UTR. The _st and _end fields represents the position of each site to the begining or end of the feature. and  We also have the respective size of each refion. in the _size tabs
+
+## Since multiple transcripts isoforms are found here, some of the data is redundant. We could filter either by abundance if isoform data is available, or use the longest isoform mapped (which should contain the most sites)
+Here, I filter transcript by length to only keep one
+```{r}
+# add the length of all section to get the full length
+m6a.dist <- m6a.dist %>% mutate(., len = utr5_size + cds_size + utr3_size)
+
+# group all sites by gene_name, than arrange them from longuest to shortest and only keep the longest gene_name, for unique coordinates (sites) 
+m6a.dist <- group_by(m6a.dist, gene_name, ) %>% arrange(.,-len) %>% distinct(.,gene_name, coord, .keep_all = T) %>% arrange(.,chr, coord) %>% ungroup()# finaly sort data by chromosome, coordinates
+
+#we can again inspect the sites and see that it worked!
+dim(m6a.dist)
+head(m6a.dist)
+```
+
+## we can now vizualize the data using the ggplot package.
+
+qplot stands for quick plot and can be used instead of the normal ggplot function.
+```{r}
+qplot(m6a.dist$rel_location, geom="histogram", bins=75) +
+  geom_vline(xintercept = 1:2, col = "grey") +
+  theme_bw()
+```
+
+qplots works well, but has to guess what exactly what we want. To instead get more granular control, we can use the full fledge ggplot2 to plot what we want
+
+For example we could do a density histogram superimposed by a density plot.
+
+```{r}
+ggplot(m6a.dist,aes(x=rel_location)) + # main function , defining what will be ploted
+  geom_histogram(aes(y=stat(density)),binwidth=0.05, fill="royalblue", alpha=0.5, color="black")+   # histogram using a relative density instead of absolute counts
+  geom_density(fill="red", alpha = 0.12)+   # superimpose a density plot
+  geom_vline(xintercept = 1:2, col = "grey40") + # add lines at 5'-CDS and CDS-3'UTR junctions
+  labs(y="Relative density", x=bquote(''*m^'6'*'A relative sites position'))+   # add custom label
+  theme_bw()  #use a cleaner theme
+```
+
+###Still this graph is not perfect: All regions are represented with equal length. This is inacurate. for example 5'UTRs are usually shorter then CDS and 3'UTR. We can rescale their position to the respective median length of 5'UTR, CDS and 3'UTR to get a better indication of their distance to start and stop codon, as well as an accurate weighing of m6a sites for real distances.
+
+We can first look at the data to see what is the extent of the problem 
+```{r}
+summary(data.frame(m6a.dist$utr5_size, m6a.dist$cds_size, m6a.dist$utr3_size), na.rm=T)
+```
+The median length of 226 for 5'UTR, 1442 for CDS and 1108 for 3'UTRs. we will need to readjust
+
+##since the longest region is the CDS, we will keep its relative length to 1 and adjust the UTRs.
+
+```{r}
+# first we find the scaling factor based on median length ratio for 5'UTR and 3'UTR
+utr5.SF <- median(m6a.dist$utr5_size, na.rm = T)/median(m6a.dist$cds_size, na.rm = T)
+utr3.SF <- median(m6a.dist$utr3_size, na.rm = T)/median(m6a.dist$cds_size, na.rm = T)
+
+#we can now rescale the values in rel_location for 5'UTR and 3'UTR using the "scale" library
+
+m6a.dist<-m6a.dist %>% 
+  mutate( scaled_location = case_when(
+                          rel_location < 1 ~ rescale(rel_location, to = c(1-utr5.SF, 1), from = c(0,1)),   # case when in 5'UTR, rescale from 0 to 1 to 1-SF to 1
+                          rel_location > 2 ~ rescale(rel_location, to = c(2, 2+utr3.SF), from = c(2,3)),   # case when in 3'UTR, rescale from 2 to 3 to 2 to 2+SF
+                          rel_location >= 1 && rel_location <= 2 ~ rel_location))    # case when in CDS, keep value 
+
+#We can then compare before and after transformation to see that the min and max values are closer to 1 and 2 respectively
+summary(data.frame(m6a.dist$rel_location, m6a.dist$scaled_location), na.rm=T)
+```
+
+#The data can now be ploted as before 
+
+using qplot: (as used in metaPlotR)
+
+```{r}
+# Histogram
+qplot(m6a.dist$scaled_location, geom="histogram") + 
+  geom_vline(xintercept = 1:2, col = "grey") + 
+  theme_bw()
+```
+
+of ggplot:
+
+```{r}
+ggplot(m6a.dist,aes(x=scaled_location)) + # main function , defining what will be ploted
+  geom_histogram(aes(y=stat(density)),binwidth=0.025, fill="royalblue", alpha=0.5, color="black")+   # histogram using a relative density instead of absolute counts
+  geom_density(fill="red", alpha = 0.12)+   # superimpose a density plot
+  geom_vline(xintercept = 1:2, col = "grey40") + # add lines at 5'-CDS and CDS-3'UTR junctions
+  labs(y="Relative density", x=bquote(''*m^'6'*'A relative sites position'))+   # add custom label
+  theme_bw()  #use a cleaner theme
+```
+
+## different types of graph can be generated beyon histogram using qplot:
+####frequency polygon
+```{r}
+qplot(m6a.dist$scaled_location, geom="freqpoly") +
+  geom_vline(xintercept = 1:2, col = "red") +
+  theme_bw()
+```
+
+#### a smooth density plot:
+```{r}
+qplot(m6a.dist$scaled_location, geom="density") + 
+  geom_vline(xintercept = 1:2, col = "red") +
+  theme_bw()
+```
+
+#### histogram with smaller bins: 
+```{r}
+# Histogram
+qplot(m6a.dist$scaled_location, geom="histogram", bins=90) + 
+  geom_vline(xintercept = 1:2, col = "grey") + 
+  theme_bw()
+```
+
+# with more knowledge of ggplot, you can plot your data exactly as you like it.
+
+```{r}
+text_5 <- textGrob("5'UTR", gp=gpar(fontsize=5, fontface="bold"))
+text_3 <- textGrob("3'UTR", gp=gpar(fontsize=5, fontface="bold"))
+text_cds <-textGrob("CDS", gp=gpar(fontsize=5, fontface="bold"))
+
+ggplot(m6a.dist,aes(scaled_location)) +
+  geom_vline(xintercept = 1:2, col = "red") +
+  geom_density(outline.type = "full", fill="#2e47d9", alpha=0.25, adjust = 1/3)+
+  geom_rug(alpha=0.05, outside = F, color="gray20")+
+  geom_rect(xmax=max(m6a.dist$scaled_location),xmin=min(m6a.dist$scaled_location),ymax=-0.03,ymin=-0.09,colour="black",fill=NA, size=0.5)+
+  labs(y="Relative density", x=bquote(''*m^'6'*'A sites position'))+
+  scale_x_continuous(limits = c(min(m6a.dist$scaled_location), max(m6a.dist$scaled_location) ))+
+  theme_classic()+
+  theme(panel.background= element_rect(fill="#F8F8F8"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())+
+  annotation_custom(text_5,xmin=0.91,xmax=0.91,ymin=0.05,ymax=0.05) +
+  annotation_custom(text_cds,xmin=1.10,xmax=1.10,ymin=0.05,ymax=0.05) +
+  annotation_custom(text_3,xmin=2.1,xmax=2.1,ymin=0.05,ymax=0.05)+
+  coord_cartesian(clip = "off")
+
+```
+
+#Once you are satisfied whith the figure, you can save it using the ggsave function.
+You can provide the heigth, width and dpi of the figure if you need a specific format. otherwise ggplot will guess what is best. the name of the saved file needs an extension (as .jpeg) to be saved
+
+```{r}
+#by default the last plot produced is saved, you can instead assign a plot to an object and use ggsave( "path/file.ext",plot)
+ggsave("Metagene.lander.m6A.sites.jpeg", height = 2.5, width = 4.5, dpi = 600)
+```
+
+
+
+## We can also plot multiple datasets on the same graphs easily. 
+```{r}
+#If you do not have a second data set on hand:
+#Generate a shuffled datasets with the same range of value as m6A data
+m6a.shuffle <- m6a.dist %>% mutate(scaled_location = sample(seq(from=min(m6a.dist$scaled_location),    #same range of values
+                                                                to = max(m6a.dist$scaled_location),
+                                                                by = 0.001),
+                                                            length(m6a.dist$scaled_location),          # maximum number of values
+                                                            replace=T)) %>% 
+  mutate(col="shuffle")  # label a new column with info about data - here it is the shuffled data
+
+# label original dataset with m6a in the same column
+m6a.dist<-m6a.dist %>% mutate(col="m6a")
+
+# combine both datasets
+combined<- bind_rows(m6a.dist, m6a.shuffle) #combine the rows of both datasets (as a unix Cat would do except that here you need the same columns to be present in both files)
+```
+
+
+###The data can now be separated by colors based on the tag in the newly created column ("col")
+It is usually much easier to plot something with ggplot when the data is tidy. You will want all the observations to be in the same column for all your data.
+```{r}
+ggplot(combined,aes(x=scaled_location, fill=col, color=col)) +
+  geom_vline(xintercept = 1:2, col = "red") +
+  geom_density(outline.type = "full", alpha=0.25, adjust = 1/3, col="black")+
+  scale_fill_manual(values=c("#2e47d9", "#97b877"), guide=guide_legend("Dataset"))+
+  scale_color_manual(values=c("#2e47d9", "#97b877"), guide='none')+
+  geom_rug(alpha=0.02, outside = F)+
+  geom_rect(xmax=max(combined$scaled_location),xmin=min(combined$scaled_location),ymax=-0.03,ymin=-0.09,colour="black",fill=NA)+
+  labs(y="Relative density", x=bquote(''*m^'6'*'A sites position'))+
+  scale_x_continuous(limits = c(min(combined$scaled_location), max(combined$scaled_location) ))+
+  theme_classic()+
+  theme(panel.background= element_rect(fill="#F8F8F8"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())+
+  annotation_custom(text_5,xmin=0.91,xmax=0.91,ymin=0.05,ymax=0.05) +
+  annotation_custom(text_cds,xmin=1.10,xmax=1.10,ymin=0.05,ymax=0.05) +
+  annotation_custom(text_3,xmin=2.1,xmax=2.1,ymin=0.05,ymax=0.05)+
+  coord_cartesian(clip = "off")
+```
+
+
+##The data can be examined in other ways, such as through their relative distance to start or stop codons.
+
+This will use the data from the _st columns, which contains the absolute distance from these positions. 
+
+generate plots for all possible data in the dataframe
+```{r}
+UTR5_Start <- qplot(m6a.dist$utr5_st, geom="freqpoly", bins=26) +
+  xlim (-50,500) +  geom_vline(xintercept = 1:2, col = "grey") + 
+  theme_minimal()+theme(axis.title.x = element_blank())+theme(axis.text.x = element_text(angle = 45))
+UTR5_end <- qplot(m6a.dist$utr5_end, geom="freqpoly", bins=50) +
+  xlim (-500,500) + geom_vline(xintercept = 1:2, col = "grey") +
+  theme_minimal()+theme(axis.title.x = element_blank())+theme(axis.text.x = element_text(angle = 45))
+CDS_Start <- qplot(m6a.dist$cds_st, geom="freqpoly",bins=50) + 
+  xlim (-500,500) + geom_vline(xintercept = 1:2, col = "grey") +
+ theme_minimal()+theme(axis.title.x = element_blank())+theme(axis.text.x = element_text(angle = 45))
+CDS_end <- qplot(m6a.dist$cds_end, geom="freqpoly", bins=50) + 
+  xlim (-500,500) + geom_vline(xintercept = 1:2, col = "grey") +
+  theme_minimal()+theme(axis.title.x = element_blank())+theme(axis.text.x = element_text(angle = 45))
+UTR3_Start <- qplot(m6a.dist$utr3_st, geom="freqpoly", bins=50) +
+  xlim (-500,500) + geom_vline(xintercept = 1:2, col = "grey") +
+  theme_minimal()+theme(axis.title.x = element_blank())+theme(axis.text.x = element_text(angle = 45))
+UTR3_end <- qplot(m6a.dist$utr3_end, geom="freqpoly", bins=26) +
+  xlim (-500,50) + geom_vline(xintercept = 1:2, col = "grey") + 
+  theme_minimal()+theme(axis.title.x = element_blank())+theme(axis.text.x = element_text(angle = 45))
+```
+
+###combine all plots in one using cowplot and save:
+```{r message=F, warning=F }
+#using cowplot
+freq<- plot_grid(UTR5_Start, UTR5_end, CDS_Start, CDS_end, UTR3_Start, UTR3_end,
+          labels=c("5'UTR Start", "5'UTR end", "CDS Start","CDS end", "3'UTR Start", "3'UTR end" ),
+          label_x = c(0.25,0.25,0.25,0.25,0.25,0.25), label_size= 8, nrow = 3,
+          label_y = c(1.05,1.05,1.05,1.05,1.05,1.05))+
+  draw_plot_label("relative position to indicated feature" , x=0, y=0.02, size=8)+
+  draw_plot_label("m6A sites Density" ,  x=0, y=0.3, size=8, angle=90)+
+  coord_cartesian(xlim= c(0,1), ylim=c(-0.1, 1), clip = "off")
+
+ggsave("freqpoly.jpeg", plot=freq, height = 6, width = 4, dpi=300)
+```
+
