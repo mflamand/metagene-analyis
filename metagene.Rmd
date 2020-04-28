@@ -183,7 +183,7 @@ You can provide the heigth, width and dpi of the figure if you need a specific f
 
 ```{r}
 #by default the last plot produced is saved, you can instead assign a plot to an object and use ggsave( "path/file.ext",plot)
-ggsave("Metagene.lander.m6A.sites.jpeg", height = 2.5, width = 4.5, dpi = 600)
+ggsave("Metagene.linder.m6A.sites.jpeg", height = 2.5, width = 4.5, dpi = 600)
 ```
 
 
