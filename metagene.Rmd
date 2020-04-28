@@ -12,13 +12,13 @@ output:
 ##you will need the following libraries
 
 to install you can run:
-install.packages("tidyverse") # ggplot comes with tidyverse, no need to reinstall.
-install.packages("grid")
-install.packages("scales)
+*install.packages("tidyverse") # ggplot comes with tidyverse, no need to reinstall.
+*install.packages("Scales)
+*etc
 
 this only needs to be done the first time, unless you installed a new version of R
 
-```{r HIDE = T}
+```{r HIDE = T, warnings=FALSE}
 # packages are loaded with : (everytime you run the markdown)
 
 library(tidyverse)
