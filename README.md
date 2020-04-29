@@ -16,11 +16,11 @@ For Windows: on the download page, you will have to select and install base for 
 Once installed, within R, you should type `writeLines('PATH="${RTOOLS40_HOME}\\usr\\bin;${PATH}"', con = "~/.Renviron")` to add the path of the compiler to R. 
 
 For MacOS-X you will need to install quite a few things as well:
-  1. on new versions, it is possible that you will need to be install XQuartz to use some packagages (https://www.xquartz.org/). It used to be provided by defaults before 10.8
-  2. Apple's Xcode developer tools. which again used to be provided. You now have to signup as a developer with Apple
+  1. on new versions of MacOS, you may have to install XQuartz (https://www.xquartz.org/). Other softwares are likely to have installed this already and you should do it if R doesn't work properly. 
+  2. Apple's Xcode developer tools.
   3. a GNU fortran compiler
 you can find details on this page : https://mac.r-project.org/tools/ 
-  4. extra libraries indicated on the previous pages. This only be necessary for certain libraries
+  4. extra libraries indicated on the previous pages. This only be necessary for certain packages
   
   Normaly, if you try to install a package and it fails, you can inspect the error message to see where it failed and figure out what was missing.
 
