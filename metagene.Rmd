@@ -12,9 +12,9 @@ output:
 ##you will need the following libraries
 
 to install you can run:
-*install.packages("tidyverse") # ggplot comes with tidyverse, no need to reinstall.
-*install.packages("scales)
-*etc
+1. install.packages("tidyverse") # ggplot comes with tidyverse, no need to reinstall.
+2. install.packages("scales)
+3. etc
 
 this only needs to be done the first time, unless you installed a new version of R
 
@@ -36,15 +36,18 @@ library(cowplot)
 #read tab delim file
 m6a.dist<-read.delim("annot_m6A.final.sorted.dist.measures.txt", header = T)
 # we can further inspect the data stored in m6a.dist
+class(m6a.dist)
 dim(m6a.dist)
 head(m6a.dist, 10)
-class(m6a.dist)
+m6a.dist %>% filter(gene_name=="YTHDF2")
 ```
 
-we now have all the information for all m6A sites stored in a dataframe. In here we have the relative position of m6a sites in either 5', 3' or cds stored in rel_location : 0-1 is 5'UTR, 1-2 is CDS and 2-3 is 3'UTR. The _st and _end fields represents the position of each site to the begining or end of the feature. and  We also have the respective size of each refion. in the _size tabs
+We now have all the information for all m6A sites stored in a dataframe. In here we have the relative position of m6a sites in either 5', 3' or cds stored in rel_location : 0-1 is 5'UTR, 1-2 is CDS and 2-3 is 3'UTR. The _st and _end fields represents the position of each site to the begining or end of the feature. and  We also have the respective size of each refion. in the _size tabs
 
 ## Since multiple transcripts isoforms are found here, some of the data is redundant. We could filter either by abundance if isoform data is available, or use the longest isoform mapped (which should contain the most sites)
-Here, I filter transcript by length to only keep one
+
+Here, I filter transcript by length to only keep the longest one
+
 ```{r}
 # add the length of all section to get the full length
 m6a.dist <- m6a.dist %>% mutate(., len = utr5_size + cds_size + utr3_size)
@@ -55,18 +58,19 @@ m6a.dist <- group_by(m6a.dist, gene_name, ) %>% arrange(.,-len) %>% distinct(.,g
 #we can again inspect the sites and see that it worked!
 dim(m6a.dist)
 head(m6a.dist)
+m6a.dist %>% filter(gene_name=="YTHDF2")
 ```
 
 ## we can now vizualize the data using the ggplot package.
 
 qplot stands for quick plot and can be used instead of the normal ggplot function.
 ```{r}
-qplot(m6a.dist$rel_location, geom="histogram", bins=75) +
+qplot(m6a.dist$rel_location, geom="histogram") +
   geom_vline(xintercept = 1:2, col = "grey") +
   theme_bw()
 ```
 
-qplots works well, but has to guess what exactly what we want. To instead get more granular control, we can use the full fledge ggplot2 to plot what we want
+##qplots works well, but has to guess what exactly what we want. To instead get more granular control, we can use the full ggplot2 function to specify the type of plots
 
 For example we could do a density histogram superimposed by a density plot.
 
@@ -76,7 +80,7 @@ ggplot(m6a.dist,aes(x=rel_location)) + # main function , defining what will be p
   geom_density(fill="red", alpha = 0.12)+   # superimpose a density plot
   geom_vline(xintercept = 1:2, col = "grey40") + # add lines at 5'-CDS and CDS-3'UTR junctions
   labs(y="Relative density", x=bquote(''*m^'6'*'A relative sites position'))+   # add custom label
-  theme_bw()  #use a cleaner theme
+  theme_classic()  #use a cleaner theme
 ```
 
 ###Still this graph is not perfect: All regions are represented with equal length. This is inacurate. for example 5'UTRs are usually shorter then CDS and 3'UTR. We can rescale their position to the respective median length of 5'UTR, CDS and 3'UTR to get a better indication of their distance to start and stop codon, as well as an accurate weighing of m6a sites for real distances.
@@ -98,8 +102,8 @@ utr3.SF <- median(m6a.dist$utr3_size, na.rm = T)/median(m6a.dist$cds_size, na.rm
 
 m6a.dist<-m6a.dist %>% 
   mutate( scaled_location = case_when(
-                          rel_location < 1 ~ rescale(rel_location, to = c(1-utr5.SF, 1), from = c(0,1)),   # case when in 5'UTR, rescale from 0 to 1 to 1-SF to 1
-                          rel_location > 2 ~ rescale(rel_location, to = c(2, 2+utr3.SF), from = c(2,3)),   # case when in 3'UTR, rescale from 2 to 3 to 2 to 2+SF
+                          rel_location < 1 ~ rescale(rel_location, to = c(1-utr5.SF, 1), from = c(0,1)),                           # case when in 5'UTR, rescale from 0 to 1 to 1-SF to 1
+                          rel_location > 2 ~ rescale(rel_location, to = c(2, 2+utr3.SF), from = c(2,3)),                           # case when in 3'UTR, rescale from 2 to 3 to 2 to 2+SF
                           rel_location >= 1 && rel_location <= 2 ~ rel_location))    # case when in CDS, keep value 
 
 #We can then compare before and after transformation to see that the min and max values are closer to 1 and 2 respectively
@@ -117,7 +121,7 @@ qplot(m6a.dist$scaled_location, geom="histogram") +
   theme_bw()
 ```
 
-of ggplot:
+or with ggplot:
 
 ```{r}
 ggplot(m6a.dist,aes(x=scaled_location)) + # main function , defining what will be ploted
@@ -125,7 +129,7 @@ ggplot(m6a.dist,aes(x=scaled_location)) + # main function , defining what will b
   geom_density(fill="red", alpha = 0.12)+   # superimpose a density plot
   geom_vline(xintercept = 1:2, col = "grey40") + # add lines at 5'-CDS and CDS-3'UTR junctions
   labs(y="Relative density", x=bquote(''*m^'6'*'A relative sites position'))+   # add custom label
-  theme_bw()  #use a cleaner theme
+  theme_classic()  #use a cleaner theme
 ```
 
 ## different types of graph can be generated beyon histogram using qplot:
@@ -192,23 +196,24 @@ ggsave("Metagene.linder.m6A.sites.jpeg", height = 2.5, width = 4.5, dpi = 600)
 ```{r}
 #If you do not have a second data set on hand:
 #Generate a shuffled datasets with the same range of value as m6A data
-m6a.shuffle <- m6a.dist %>% mutate(scaled_location = sample(seq(from=min(m6a.dist$scaled_location),    #same range of values
-                                                                to = max(m6a.dist$scaled_location),
-                                                                by = 0.001),
-                                                            length(m6a.dist$scaled_location),          # maximum number of values
-                                                            replace=T)) %>% 
+m6a.shuffle <- m6a.dist %>% 
+  mutate(scaled_location = sample(seq(from=min(m6a.dist$scaled_location), 
+                                      to = max(m6a.dist$scaled_location),
+                                      by = 0.001),
+                                  length(m6a.dist$scaled_location), replace=T)) %>%
   mutate(col="shuffle")  # label a new column with info about data - here it is the shuffled data
 
 # label original dataset with m6a in the same column
 m6a.dist<-m6a.dist %>% mutate(col="m6a")
 
 # combine both datasets
-combined<- bind_rows(m6a.dist, m6a.shuffle) #combine the rows of both datasets (as a unix Cat would do except that here you need the same columns to be present in both files)
+combined<- bind_rows(m6a.dist, m6a.shuffle) #combine both datasets
 ```
 
 
 ###The data can now be separated by colors based on the tag in the newly created column ("col")
-It is usually much easier to plot something with ggplot when the data is tidy. You will want all the observations to be in the same column for all your data.
+It is usually much easier to plot something with ggplot when the data is tidy, meaning that each row is a distinct observation, with the data in a single column. (all the data is in scaled_location)
+
 ```{r}
 ggplot(combined,aes(x=scaled_location, fill=col, color=col)) +
   geom_vline(xintercept = 1:2, col = "red") +
