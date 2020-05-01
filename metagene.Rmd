@@ -13,7 +13,7 @@ output:
 
 to install you can run:
 1. install.packages("tidyverse") # ggplot comes with tidyverse, no need to reinstall.
-2. install.packages("scales)
+2. install.packages("scales")
 3. etc
 
 this only needs to be done the first time, unless you installed a new version of R
@@ -27,7 +27,6 @@ library(grid)
 library(scales)
 #optional for the last graph
 library(cowplot)
-
 ```
 
 ###First we read the input data from perl and store it in m6a.dist
