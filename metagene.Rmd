@@ -51,7 +51,7 @@ Here, I filter transcript by length to only keep the longest one
 # add the length of all section to get the full length
 m6a.dist <- m6a.dist %>% mutate(., len = utr5_size + cds_size + utr3_size)
 
-# group all sites by gene_name, than arrange them from longuest to shortest and only keep the longest gene_name, for unique coordinates (sites) 
+# group all sites by gene_name, than arrange them from longest to shortest and only keep the longest gene_name, for unique coordinates (sites) 
 m6a.dist <- group_by(m6a.dist, gene_name, ) %>% arrange(.,-len) %>% distinct(.,gene_name, coord, .keep_all = T) %>% arrange(.,chr, coord) %>% ungroup()# finaly sort data by chromosome, coordinates
 
 #we can again inspect the sites and see that it worked!
